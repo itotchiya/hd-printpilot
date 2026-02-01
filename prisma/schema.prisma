@@ -1,0 +1,193 @@
+// HD-PrintPilot Database Schema
+// Based on Havet/IMB Excel workbook logic
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// REFERENCE DATA TABLES
+// ============================================
+
+/// Paper types and prices from "Tableau papier" sheet
+model Paper {
+  id          String   @id @default(cuid())
+  paperType   String   // "Couché Mat", "Couché Satin", "Brillant", etc.
+  category    String   // "interior" or "cover"
+  grammage    Int      // GSM (grams per square metre)
+  price64x90  Decimal  @db.Decimal(10, 4) // €/kg for 64×90 format
+  price65x92  Decimal  @db.Decimal(10, 4) // €/kg for 65×92 format
+  price70x102 Decimal  @db.Decimal(10, 4) // €/kg for 70×102 format
+  price72x102 Decimal  @db.Decimal(10, 4) // €/kg for 72×102 format
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([paperType, category, grammage])
+  @@index([paperType, category])
+}
+
+/// Digital finishing costs from "Tableau Façonnage Num" sheet
+model FinishingDigital {
+  id            String   @id @default(cuid())
+  finishingType String   // "dos_carre_colle", "dos_carre_colle_pur", "piqure", "pelliculage_recto", "pelliculage_recto_verso"
+  pageRangeMin  Int      // 0, 73, 153
+  pageRangeMax  Int      // 72, 152, 999
+  quantityMin   Int      // Bracket start
+  quantityMax   Int      // Bracket end
+  perUnitCost   Decimal  @db.Decimal(10, 4)
+  fixedCost     Decimal  @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([finishingType, pageRangeMin, quantityMin])
+}
+
+/// Offset finishing costs from "Tableau Façonnage OFFSET" sheet
+model FinishingOffset {
+  id            String   @id @default(cuid())
+  finishingType String   // "dos_carre_colle", "dos_carre_colle_pur", "dos_carre_colle_couture", "piqure"
+  pageRangeMin  Int
+  pageRangeMax  Int
+  quantityMin   Int
+  quantityMax   Int
+  perUnitCost   Decimal  @db.Decimal(10, 4)
+  fixedCost     Decimal  @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([finishingType, pageRangeMin, quantityMin])
+}
+
+/// Transport/delivery costs from "Transports" sheet
+model Transport {
+  id           String   @id @default(cuid())
+  department   String   // "75 - Paris", "69 - Rhône", etc.
+  weightMin    Decimal  @db.Decimal(10, 2) // kg
+  weightMax    Decimal  @db.Decimal(10, 2) // kg
+  cost         Decimal  @db.Decimal(10, 2) // €
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([department, weightMin, weightMax])
+  @@index([department])
+}
+
+/// Offset machine settings from "Réglages Presses" sheet
+model MachineSettings {
+  id              String   @id @default(cuid())
+  pressFormat     String   // "64x90", "65x92", "70x102", "72x102"
+  sheetsPerHour   Int      // Productivity rate
+  costPerPlate    Decimal  @db.Decimal(10, 2) // € per plate
+  hourlyRate      Decimal  @db.Decimal(10, 2) // € per hour
+  wasteFactor     Decimal  @db.Decimal(5, 4)  // e.g., 0.12 for 12%
+  makeReadySheets Int      // Waste sheets for make-ready
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([pressFormat])
+}
+
+/// Packaging costs from finishing tables
+model PackagingCost {
+  id            String   @id @default(cuid())
+  packagingType String   // "a_lunite", "par_paquet", "par_2", etc.
+  perUnitCost   Decimal  @db.Decimal(10, 4)
+  fixedCost     Decimal  @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([packagingType])
+}
+
+// ============================================
+// QUOTE STORAGE
+// ============================================
+
+/// Saved quotes for history and retrieval
+model Quote {
+  id                    String   @id @default(cuid())
+  
+  // Input parameters
+  printMode             String   // "digital" or "offset"
+  quantity              Int
+  formatWidth           Decimal  @db.Decimal(6, 2) // cm
+  formatHeight          Decimal  @db.Decimal(6, 2) // cm
+  interiorPages         Int
+  coverPages            Int      // 0, 2, or 4
+  rabatWidth            Decimal? @db.Decimal(6, 2) // Flap width for offset
+  
+  // Paper selections
+  interiorPaperType     String
+  interiorGrammage      Int
+  coverPaperType        String?
+  coverGrammage         Int?
+  
+  // Color options
+  interiorColors        String   // "quadrichromie", "noir", etc.
+  coverColors           String?
+  
+  // Finishing options
+  bindingType           String   // "rien", "dos_carre_colle", "piqure", etc.
+  laminationOrientation String?  // "recto", "recto_verso", "non"
+  laminationFinish      String?  // "mat", "brillant", "soft_touch"
+  
+  // Product type (for leaflets)
+  productType           String?  // "flyer_poster", "carte_visite", "depliant"
+  foldType              String?  // "roule", "accordeon", "croise"
+  foldCount             Int?     // 1-6
+  secondaryFoldType     String?  // "croise", "rien"
+  
+  // Packaging
+  packagingType         String?  // "non", "a_lunite", "par_paquet", etc.
+  
+  // Delivery (stored as JSON array)
+  deliveries            Json?    // [{ quantity, department, tailLift }]
+  
+  // Calculated costs
+  weightPerCopy         Decimal  @db.Decimal(10, 4) // kg
+  totalWeight           Decimal  @db.Decimal(10, 2) // kg
+  paperCost             Decimal  @db.Decimal(10, 2) // €
+  printingCost          Decimal  @db.Decimal(10, 2) // €
+  bindingCost           Decimal  @db.Decimal(10, 2) // €
+  laminationCost        Decimal  @db.Decimal(10, 2) // €
+  packagingCost         Decimal  @db.Decimal(10, 2) // €
+  deliveryCost          Decimal  @db.Decimal(10, 2) // €
+  subtotal              Decimal  @db.Decimal(10, 2) // €
+  marginPercent         Decimal  @db.Decimal(5, 4)  // 0.05 or 0.07
+  marginAmount          Decimal  @db.Decimal(10, 2) // €
+  total                 Decimal  @db.Decimal(10, 2) // €
+  unitPrice             Decimal  @db.Decimal(10, 4) // € per copy
+  
+  // Offset-specific fields
+  pressFormat           String?  // Selected optimal press format
+  plateCount            Int?     // Number of plates used
+  makeReadyCost         Decimal? @db.Decimal(10, 2) // €
+  
+  // Metadata
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([printMode])
+}
+
+/// Application configuration (margins, supplements, etc.)
+model Config {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
