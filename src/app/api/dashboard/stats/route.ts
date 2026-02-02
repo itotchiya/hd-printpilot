@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 
 /**
  * GET /api/dashboard/stats
@@ -10,7 +11,7 @@ import { prisma } from '@/lib/db'
 export async function GET() {
   try {
     // Only count completed quotes for KPIs
-    const completedFilter = { status: 'completed' }
+    const completedFilter: Prisma.QuoteWhereInput = { status: 'completed' }
     
     const totalQuotes = await prisma.quote.count({
       where: completedFilter,

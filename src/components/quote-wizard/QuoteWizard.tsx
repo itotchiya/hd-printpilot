@@ -180,8 +180,10 @@ export function QuoteWizard() {
           if (data.success && data.draft?.id) {
             setDraftId(data.draft.id);
             // Replace URL silently to include the new draft ID
-            const newUrl = `${window.location.pathname}?draft=${data.draft.id}`;
-            window.history.replaceState({ ...window.history.state }, '', newUrl);
+            if (typeof window !== 'undefined') {
+              const newUrl = `${window.location.pathname}?draft=${data.draft.id}`;
+              window.history.replaceState({ ...window.history.state }, '', newUrl);
+            }
           }
         } catch (error) {
           console.warn('Initial draft creation failed:', error);
