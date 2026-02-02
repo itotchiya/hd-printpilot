@@ -1,16 +1,23 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
 /**
  * GET /api/dashboard/stats
  * 
  * Calculate KPIs based on saved quotes.
+ * EXCLUDES drafts from all calculations.
  */
 export async function GET() {
   try {
-    const totalQuotes = await prisma.quote.count()
+    // Only count completed quotes for KPIs
+    const completedFilter = { status: 'completed' }
+    
+    const totalQuotes = await prisma.quote.count({
+      where: completedFilter,
+    })
     
     const stats = await prisma.quote.aggregate({
+      where: completedFilter,
       _sum: {
         total: true,
       },
@@ -19,17 +26,23 @@ export async function GET() {
       },
     })
     
-    // Get quotes for current month
+    // Get quotes for current month (excluding drafts)
     const startOfMonth = new Date()
     startOfMonth.setDate(1)
     startOfMonth.setHours(0, 0, 0, 0)
     
     const quotesThisMonth = await prisma.quote.count({
       where: {
+        ...completedFilter,
         createdAt: {
           gte: startOfMonth,
         },
       },
+    })
+    
+    // Count drafts separately for display
+    const totalDrafts = await prisma.quote.count({
+      where: { status: 'draft' },
     })
     
     return NextResponse.json({
@@ -39,6 +52,7 @@ export async function GET() {
         totalValue: Number(stats._sum.total || 0),
         averageValue: Number(stats._avg.total || 0),
         quotesThisMonth,
+        totalDrafts,
       }
     })
     

@@ -124,6 +124,12 @@ export const quoteSchema = z.object({
   ...bindingSchema.shape,
   ...productOptionsSchema.shape,
   ...deliverySchema.shape,
+}).refine((data) => {
+  const totalDeliveries = data.deliveries.reduce((sum, d) => sum + (d.quantity || 0), 0);
+  return totalDeliveries === data.quantity;
+}, {
+  message: "La somme des quantités de livraison doit être égale à la quantité totale commandée.",
+  path: ["deliveries"]
 })
 
 export type QuoteFormData = z.infer<typeof quoteSchema>

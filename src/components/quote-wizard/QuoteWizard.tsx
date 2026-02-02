@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { useForm, FormProvider } from 'react-hook-form'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { useForm, FormProvider, Path } from 'react-hook-form'
+import { toast } from 'sonner'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { quoteSchema, QuoteFormData, FRENCH_LABELS } from '@/lib/schemas/quote-schema'
-import { WizardProgress } from './WizardProgress'
-import { WizardNavigation } from './WizardNavigation'
+import { quoteSchema, QuoteFormData } from '@/lib/schemas/quote-schema'
 import { StepPrintMode } from './steps/StepPrintMode'
 import { StepQuantityFormat } from './steps/StepQuantityFormat'
 import { StepPages } from './steps/StepPages'
@@ -15,17 +15,46 @@ import { StepBinding } from './steps/StepBinding'
 import { StepProductOptions } from './steps/StepProductOptions'
 import { StepDelivery } from './steps/StepDelivery'
 import { StepReview } from './steps/StepReview'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { QuoteResultView, type QuoteResult } from './QuoteResultView'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, FileText, LayoutDashboard, Download, ArrowRight, Loader2 } from 'lucide-react'
-import Link from 'next/link'
+import { 
+  ArrowRight, 
+  Loader2,
+  ChevronLeft, 
+  ChevronRight
+} from 'lucide-react'
 
 const TOTAL_STEPS = 9
 
+import { useWizard } from '@/context/WizardContext';
+
+
 export function QuoteWizard() {
-  const [currentStep, setCurrentStep] = useState(1)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [quoteResult, setQuoteResult] = useState<any>(null)
+  const { 
+    currentStep, 
+    setCurrentStep, 
+    formDataRef, 
+    draftId,
+    setDraftId, 
+    highestVisitedStep, 
+    setHighestVisitedStep,
+    clearStepReview,
+    markLaterStepsForReview,
+    resetWizard,
+    setIsResultView
+  } = useWizard();
+  const searchParams = useSearchParams();
+  const urlDraftId = searchParams.get('draft');
+  const isInitialized = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [quoteResult, setQuoteResult] = useState<QuoteResult | null>(null);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(!!urlDraftId);
+
+  // Sync isResultView with quoteResult presence
+  useEffect(() => {
+    setIsResultView(!!quoteResult);
+  }, [quoteResult, setIsResultView]);
+
 
   const methods = useForm<QuoteFormData>({
     resolver: zodResolver(quoteSchema),
@@ -45,84 +74,264 @@ export function QuoteWizard() {
       packagingType: 'non',
       deliveries: [{ quantity: 0, department: '', tailLift: false }],
     },
-  })
+  });
 
-  const { handleSubmit, trigger, watch, reset } = methods
-  const printMode = watch('printMode')
+  const { handleSubmit, watch, reset, trigger } = methods;
+  const printMode = watch('printMode');
+  const [isCurrentStepValid, setIsCurrentStepValid] = useState(false);
 
-  // Step validation schemas mapping
-  const stepValidationFields: Record<number, (keyof QuoteFormData)[]> = {
-    1: ['printMode'],
-    2: ['quantity', 'format'],
-    3: ['interiorPages', 'coverPages'],
-    4: ['interiorPaperType', 'interiorGrammage'],
-    5: ['interiorColors'],
-    6: ['bindingType', 'laminationOrientation'],
-    7: ['productType', 'packagingType'],
-    8: ['deliveries'],
-    9: [], // Review step
-  }
+  // Load draft from URL parameter (database)
+  const loadDraftFromDB = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/quotes/${id}`);
+      const data = await res.json();
+      if (data.success && data.quote) {
+        const q = data.quote;
+        reset({
+          printMode: q.printMode,
+          quantity: q.quantity,
+          format: `${q.formatWidth}x${q.formatHeight}`,
+          interiorPages: q.interiorPages,
+          coverPages: String(q.coverPages) as '0' | '2' | '4',
+          rabatWidth: q.rabatWidth || undefined,
+          interiorPaperType: q.interiorPaperType,
+          interiorGrammage: q.interiorGrammage,
+          coverPaperType: q.coverPaperType || undefined,
+          coverGrammage: q.coverGrammage || undefined,
+          interiorColors: q.interiorColors,
+          coverColors: q.coverColors || undefined,
+          bindingType: q.bindingType,
+          laminationOrientation: q.laminationOrientation || 'non',
+          laminationFinish: q.laminationFinish || undefined,
+          productType: q.productType || 'brochure',
+          foldType: q.foldType || undefined,
+          foldCount: q.foldCount || undefined,
+          secondaryFoldType: q.secondaryFoldType || undefined,
+          packagingType: q.packagingType || 'non',
+          deliveries: q.deliveries || [{ quantity: 0, department: '', tailLift: false }],
+        });
+        // Restore the step user was on when they saved the draft
+        if (q.currentStep && q.currentStep > 1) {
+          setCurrentStep(q.currentStep);
+          // Also restore highestVisitedStep so user can navigate to all visited steps
+          setHighestVisitedStep(q.currentStep);
+        }
+        toast.success('Brouillon chargé', { description: 'Continuez votre devis.' });
+      }
+    } catch (e) {
+      console.error('Failed to load draft', e);
+      toast.error('Erreur', { description: 'Impossible de charger le brouillon.' });
+    } finally {
+      setIsLoadingDraft(false);
+    }
+  }, [reset, setCurrentStep, setHighestVisitedStep]);
+
+  // Initialization: Load draft from URL OR reset for a clean start
+  useEffect(() => {
+    if (isInitialized.current) return;
+    
+    if (urlDraftId) {
+      setDraftId(urlDraftId);
+      loadDraftFromDB(urlDraftId);
+    } else {
+      // Direct visit to /new without draft -> Clear everything
+      resetWizard();
+      reset({
+        printMode: undefined as unknown as 'digital' | 'offset',
+        quantity: undefined as unknown as number,
+        format: '',
+        interiorPages: undefined as unknown as number,
+        coverPages: '0',
+        interiorPaperType: '',
+        interiorGrammage: undefined as unknown as number,
+        interiorColors: undefined as unknown as 'quadrichromie',
+        bindingType: 'rien',
+        laminationOrientation: 'non',
+        productType: 'brochure',
+        packagingType: 'non',
+        deliveries: [{ quantity: 0, department: '', tailLift: false }],
+      });
+      setIsLoadingDraft(false);
+    }
+    
+    isInitialized.current = true;
+  }, [urlDraftId, loadDraftFromDB, resetWizard, reset, setDraftId]);
+
+  // Create an initial draft ID automatically for new quotes if not starting from one
+  useEffect(() => {
+    const createInitialDraft = async () => {
+      // Only create if we are on step 1, don't have a draft ID yet, and not loading/submitting
+      if (
+        currentStep === 1 && 
+        !urlDraftId && 
+        !draftId && 
+        !isLoadingDraft && 
+        !isSubmitting && 
+        !quoteResult &&
+        isInitialized.current
+      ) {
+        try {
+          const response = await fetch('/api/quotes/draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currentStep: 1 }),
+          });
+          const data = await response.json();
+          if (data.success && data.draft?.id) {
+            setDraftId(data.draft.id);
+            // Replace URL silently to include the new draft ID
+            const newUrl = `${window.location.pathname}?draft=${data.draft.id}`;
+            window.history.replaceState({ ...window.history.state }, '', newUrl);
+          }
+        } catch (error) {
+          console.warn('Initial draft creation failed:', error);
+        }
+      }
+    };
+
+    createInitialDraft();
+  }, [currentStep, urlDraftId, draftId, isLoadingDraft, isSubmitting, quoteResult, setDraftId]);
+
+
+  // Save draft on changes AND sync to context ref for header access
+  useEffect(() => {
+    const subscription = watch((value) => {
+      // Sync to context ref for header to access
+      formDataRef.current = value;
+      
+      localStorage.setItem('quote-wizard-draft', JSON.stringify({
+        data: value,
+        step: currentStep,
+        _timestamp: Date.now()
+      }));
+    });
+    return () => subscription.unsubscribe();
+  }, [watch, currentStep, formDataRef]);
+
+  const getFieldsForStep = (step: number) => {
+    switch (step) {
+      case 1: return ['printMode'];
+      case 2: return ['quantity', 'format'];
+      case 3: return ['interiorPages', 'coverPages', 'rabatWidth'];
+      case 4: return ['interiorPaperType', 'interiorGrammage', 'coverPaperType', 'coverGrammage'];
+      case 5: return ['interiorColors', 'coverColors'];
+      case 6: return ['bindingType', 'laminationOrientation', 'laminationFinish'];
+      case 7: return ['productType', 'foldType', 'foldCount', 'secondaryFoldType', 'packagingType'];
+      case 8: return ['deliveries'];
+      default: return [];
+    }
+  };
+
+  // Validate current step fields whenever form values change
+  useEffect(() => {
+    const subscription = watch(() => {
+      const validateCurrentStep = async () => {
+        const fields = getFieldsForStep(currentStep);
+        if (fields.length === 0) {
+          setIsCurrentStepValid(true);
+          return;
+        }
+        const isValid = await trigger(fields as Path<QuoteFormData>[], { shouldFocus: false });
+        setIsCurrentStepValid(isValid);
+      };
+      validateCurrentStep();
+    });
+    
+    // Initial validation
+    const validateCurrentStep = async () => {
+      const fields = getFieldsForStep(currentStep);
+      if (fields.length === 0) {
+        setIsCurrentStepValid(true);
+        return;
+      }
+      const isValid = await trigger(fields as Path<QuoteFormData>[], { shouldFocus: false });
+      setIsCurrentStepValid(isValid);
+    };
+    validateCurrentStep();
+    
+    return () => subscription.unsubscribe();
+  }, [currentStep, trigger, watch]);
 
   const handleNext = async () => {
-    const fieldsToValidate = stepValidationFields[currentStep]
-    const isValid = await trigger(fieldsToValidate)
+    const fields = getFieldsForStep(currentStep);
+    const isValid = await trigger(fields as Path<QuoteFormData>[]);
     
     if (isValid && currentStep < TOTAL_STEPS) {
-      setCurrentStep(currentStep + 1)
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
+      // Track highest visited step
+      if (nextStep > highestVisitedStep) {
+        setHighestVisitedStep(nextStep);
+      }
+      // Clear review status when arriving at a step
+      clearStepReview(nextStep);
     }
-  }
+  };
 
   const handlePrevious = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
+      setCurrentStep((prev) => prev - 1);
     }
-  }
+  };
 
   const handleStepClick = async (step: number) => {
-    if (quoteResult) return;
-
     if (step < currentStep) {
-      setCurrentStep(step)
-      return
+      setCurrentStep(step);
+    } else if (step > currentStep && step <= highestVisitedStep) {
+      // Allow clicking forward only to previously visited steps
+      setCurrentStep(step);
+      clearStepReview(step);
     }
-    
-    let canProceed = true
-    for (let i = currentStep; i < step; i++) {
-      const isValid = await trigger(stepValidationFields[i])
-      if (!isValid) {
-        canProceed = false
-        setCurrentStep(i)
-        break
+  };
+
+  // Track when form data changes and mark later steps for review
+  const previousFormData = useRef<Record<string, unknown>>({});
+  
+  useEffect(() => {
+    const subscription = watch((value) => {
+      // Check if any important field changed
+      const currentFields = getFieldsForStep(currentStep);
+      let hasChanges = false;
+      const valueRecord = value as Record<string, unknown>;
+      
+      for (const field of currentFields) {
+        if (JSON.stringify(valueRecord[field]) !== JSON.stringify(previousFormData.current[field])) {
+          hasChanges = true;
+          break;
+        }
       }
-    }
-    
-    if (canProceed) {
-      setCurrentStep(step)
-    }
-  }
+      
+      if (hasChanges && highestVisitedStep > currentStep) {
+        // Mark all later visited steps for review
+        markLaterStepsForReview();
+      }
+      
+      // Update previous form data
+      previousFormData.current = { ...valueRecord };
+    });
+    return () => subscription.unsubscribe();
+  }, [watch, currentStep, highestVisitedStep, markLaterStepsForReview]);
 
   const onSubmit = async (data: QuoteFormData) => {
-    setIsSubmitting(true)
+    setIsSubmitting(true);
     try {
       const response = await fetch('/api/quotes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      })
-      
-      const result = await response.json()
-      
-      if (result.success) {
-        setQuoteResult(result.quote)
+      });
+      const result = await response.json();
+      if (response.ok) {
+        setQuoteResult(result.quote);
       } else {
-        console.error('Erreur:', result.error)
+        console.error('Erreur:', result.error);
       }
     } catch (error) {
-      console.error('Erreur lors du calcul du devis:', error)
+      console.error('Erreur lors du calcul du devis:', error);
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const handleDownload = () => {
     if (quoteResult?.id) {
@@ -130,87 +339,40 @@ export function QuoteWizard() {
     }
   };
 
-  const formatEuro = (val: number) => 
-    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(val);
+  const handleReset = () => {
+    setQuoteResult(null);
+    resetWizard();
+    reset({
+      printMode: undefined as unknown as 'digital' | 'offset',
+      quantity: undefined as unknown as number,
+      format: '',
+      interiorPages: undefined as unknown as number,
+      coverPages: '0',
+      interiorPaperType: '',
+      interiorGrammage: undefined as unknown as number,
+      interiorColors: undefined as unknown as 'quadrichromie',
+      bindingType: 'rien',
+      laminationOrientation: 'non',
+      productType: 'brochure',
+      packagingType: 'non',
+      deliveries: [{ quantity: 0, department: '', tailLift: false }],
+    });
+    // Remove draft from URL silently
+    const newUrl = window.location.pathname;
+    window.history.replaceState({ ...window.history.state }, '', newUrl);
+    // Force a re-initialization to trigger new draft creation
+    isInitialized.current = false;
+  };
 
   if (quoteResult) {
     return (
-      <div className="max-w-4xl mx-auto py-8 px-4 animate-in zoom-in-95 duration-500">
-        <Card className="border-2 border-primary/20 shadow-xl overflow-hidden">
-          <div className="bg-primary/5 p-8 border-b border-primary/10">
-            <div className="flex flex-col items-center text-center">
-              <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-4">
-                <CheckCircle2 className="h-10 w-10" />
-              </div>
-              <h2 className="text-3xl font-bold text-slate-900">Devis Calculé avec Succès</h2>
-              <p className="text-slate-600 mt-2">Référence: QT-{quoteResult.id.slice(-8).toUpperCase()}</p>
-            </div>
-          </div>
-          
-          <CardContent className="p-8">
-            <div className="grid md:grid-cols-2 gap-12">
-              {/* Main Price */}
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1">Total HT</h3>
-                  <div className="text-5xl font-black text-primary">{formatEuro(quoteResult.totalPrice)}</div>
-                  <p className="text-slate-500 mt-2">Soit {formatEuro(quoteResult.pricePerUnit)} par exemplaire</p>
-                </div>
-                
-                <div className="pt-6 border-t space-y-3">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500 font-medium">Mode d'impression</span>
-                    <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold uppercase">
-                      {quoteResult.selectedMode}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500">Poids total estimé</span>
-                    <span className="font-semibold">{quoteResult.totalWeight} kg</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Detailed Breakdown */}
-              <div className="bg-slate-50 rounded-xl p-6 space-y-4">
-                <h3 className="font-bold text-slate-900 flex items-center">
-                  <FileText className="mr-2 h-4 w-4 text-primary" /> Détail du prix
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <BreakdownRow label="Papier" value={quoteResult.breakdown.paperCost} />
-                  <BreakdownRow label="Impression & Setup" value={quoteResult.breakdown.printingCost} />
-                  <BreakdownRow label="Façonnage" value={quoteResult.breakdown.bindingCost} />
-                  {quoteResult.breakdown.laminationCost > 0 && <BreakdownRow label="Pelliculage" value={quoteResult.breakdown.laminationCost} />}
-                  <BreakdownRow label="Livraison" value={quoteResult.breakdown.deliveryCost} />
-                  <div className="pt-2 border-t mt-2 flex justify-between font-bold text-slate-900">
-                    <span>Sous-total HT</span>
-                    <span>{formatEuro(quoteResult.breakdown.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground italic">
-                    <span>Marge ({quoteResult.breakdown.marginRate})</span>
-                    <span>{formatEuro(quoteResult.breakdown.marginAmount)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-12 flex flex-col sm:flex-row gap-4 items-center justify-center border-t pt-8">
-              <Button size="lg" className="w-full sm:w-auto px-8" asChild>
-                <Link href="/dashboard">
-                  <LayoutDashboard className="mr-2 h-4 w-4" /> Accéder au Dashboard
-                </Link>
-              </Button>
-              <Button variant="outline" size="lg" className="w-full sm:w-auto px-8" onClick={() => { setQuoteResult(null); setCurrentStep(1); reset(); }}>
-                Créer un autre devis
-              </Button>
-              <Button variant="ghost" size="lg" onClick={handleDownload} className="w-full sm:w-auto text-primary">
-                <Download className="mr-2 h-4 w-4" /> Télécharger PDF
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
+      <QuoteResultView 
+        quoteResult={quoteResult} 
+        onDownload={handleDownload} 
+        onReset={handleReset}
+        quantity={watch('quantity')}
+      />
+    );
   }
 
   const renderStep = () => {
@@ -223,68 +385,81 @@ export function QuoteWizard() {
       case 6: return <StepBinding printMode={printMode} />
       case 7: return <StepProductOptions />
       case 8: return <StepDelivery />
-      case 9: return <StepReview />
+      case 9: return <StepReview onEditStep={handleStepClick} />
       default: return null
     }
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-extrabold text-slate-900 mb-3 tracking-tight">
-            Havet <span className="text-primary">PrintPilot</span>
-          </h1>
-          <p className="text-slate-600 text-lg max-w-lg mx-auto">
-            Configurez votre projet en quelques étapes pour obtenir un devis instantané.
-          </p>
-        </div>
+    <div className="w-full">
+      {/* Stepper area removed - now in DashboardHeader */}
 
-        <WizardProgress 
-          currentStep={currentStep} 
-          totalSteps={TOTAL_STEPS}
-          stepLabels={FRENCH_LABELS.steps}
-          onStepClick={handleStepClick}
-        />
-
-        <FormProvider {...methods}>
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <Card className="mt-8 shadow-lg border-primary/5">
-              <CardHeader className="border-b bg-muted/5 py-4">
-                <CardTitle className="text-lg font-bold flex items-center justify-between">
-                  <span>Étape {currentStep}: {FRENCH_LABELS.steps[currentStep - 1]}</span>
-                  <span className="text-xs font-normal text-muted-foreground uppercase tracking-widest bg-muted px-2 py-0.5 rounded">
-                    {currentStep} / {TOTAL_STEPS}
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-8">
+      {/* Content Area - Clean Typeform-like layout */}
+      <div className="px-6 md:px-12 pb-32 pt-8">
+        <div className="max-w-3xl mx-auto">
+          <FormProvider {...methods}>
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                 {renderStep()}
-              </CardContent>
-            </Card>
-
-            <WizardNavigation
-              currentStep={currentStep}
-              totalSteps={TOTAL_STEPS}
-              onPrevious={handlePrevious}
-              onNext={handleNext}
-              isSubmitting={isSubmitting}
-            />
-          </form>
-        </FormProvider>
+              </div>
+            </form>
+          </FormProvider>
+        </div>
       </div>
-    </div>
-  )
-}
 
-function BreakdownRow({ label, value }: { label: string; value: number }) {
-  const formatEuro = (val: number) => 
-    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(val);
-    
-  return (
-    <div className="flex justify-between items-center py-1">
-      <span className="text-slate-600">{label}</span>
-      <span className="font-semibold text-slate-800">{formatEuro(value)}</span>
+      {/* Fixed Footer - Always at screen bottom */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/20 backdrop-blur-xl border-t supports-[backdrop-filter]:bg-background/30 py-4 px-6 md:px-12">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handlePrevious}
+            disabled={currentStep === 1 || isSubmitting}
+            className="h-11 px-6 rounded-lg gap-2"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Précédent
+          </Button>
+
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground font-medium hidden sm:block">
+              Étape {currentStep} sur {TOTAL_STEPS}
+            </span>
+            
+            {currentStep === TOTAL_STEPS ? (
+              <Button
+                type="submit"
+                onClick={handleSubmit(onSubmit)}
+                disabled={isSubmitting}
+                className="h-11 px-8 rounded-lg font-bold bg-primary hover:bg-primary/90 gap-2 border-b-4 border-primary/20"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Calcul...
+                  </>
+                ) : (
+                  <>
+                    Calculer le devis
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={handleNext}
+                disabled={isSubmitting || !isCurrentStepValid}
+                className="h-11 px-8 rounded-lg font-bold gap-2"
+              >
+                Suivant
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
+

@@ -16,15 +16,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Label } from '@/components/ui/label'
+import { DashedCard } from '@/components/ui/dashed-card'
+import { cn } from '@/lib/utils'
 
 interface StepBindingProps {
   printMode?: PrintMode
 }
 
 export function StepBinding({ printMode }: StepBindingProps) {
-  const { control } = useFormContext<QuoteFormData>()
+  const { control, setValue } = useFormContext<QuoteFormData>()
+  const bindingType = useWatch({ control, name: 'bindingType' })
   const laminationOrientation = useWatch({ control, name: 'laminationOrientation' })
   const coverPages = useWatch({ control, name: 'coverPages' })
 
@@ -38,14 +39,15 @@ export function StepBinding({ printMode }: StepBindingProps) {
     : (['rien', 'dos_carre_colle', 'dos_carre_colle_pur', 'piqure'] as const)
 
   return (
-    <div className="space-y-6">
-      <p className="text-slate-600">
+    <div className="space-y-10">
+      {/* Page Header */}
+      <p className="text-muted-foreground text-base">
         Choisissez le type de reliure et les options de finition pour votre document.
       </p>
 
-      {/* Binding type */}
-      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-        <h3 className="font-medium text-slate-900 mb-4">Type de reliure</h3>
+      {/* Section: Binding Type */}
+      <div className="border border-dashed border-muted-foreground/30 rounded-lg p-6 space-y-4 bg-muted/20">
+        <h3 className="font-semibold text-foreground text-base">Type de reliure</h3>
         
         <FormField
           control={control}
@@ -53,23 +55,34 @@ export function StepBinding({ printMode }: StepBindingProps) {
           render={({ field }) => (
             <FormItem>
               <FormControl>
-                <RadioGroup
-                  onValueChange={field.onChange}
-                  value={field.value || ''}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-3"
-                >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {bindingOptions.map((option) => (
-                    <div key={option} className="flex items-start space-x-3 p-3 bg-white rounded-lg border border-slate-200 hover:border-blue-400 transition-colors">
-                      <RadioGroupItem value={option} id={`binding-${option}`} className="mt-0.5" />
-                      <Label htmlFor={`binding-${option}`} className="cursor-pointer flex-1">
-                        <span className="font-medium block">{FRENCH_LABELS.binding[option]}</span>
-                        <span className="text-xs text-slate-500 block mt-1">
-                          {getBindingDescription(option)}
-                        </span>
-                      </Label>
-                    </div>
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setValue('bindingType', option, { shouldValidate: true })}
+                      className="w-full text-left"
+                    >
+                      <DashedCard
+                        className={cn(
+                          "p-4 transition-all duration-200 cursor-pointer h-full",
+                          field.value === option && "bg-primary/5"
+                        )}
+                        active={field.value === option}
+                        color="primary"
+                      >
+                        <div className="flex flex-col gap-1 pr-6">
+                          <span className="font-medium text-foreground text-sm">
+                            {FRENCH_LABELS.binding[option]}
+                          </span>
+                          <span className="text-xs text-muted-foreground leading-relaxed">
+                            {getBindingDescription(option)}
+                          </span>
+                        </div>
+                      </DashedCard>
+                    </button>
                   ))}
-                </RadioGroup>
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -77,21 +90,32 @@ export function StepBinding({ printMode }: StepBindingProps) {
         />
       </div>
 
-      {/* Lamination - only if has cover */}
+      {/* Section: Lamination (only if has cover) */}
       {hasCover && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-medium text-blue-900 mb-4">Pelliculage</h3>
+        <div className="border border-dashed border-muted-foreground/30 rounded-lg p-6 space-y-6 bg-muted/20">
+          <div className="flex flex-col gap-1">
+            <h3 className="font-semibold text-foreground text-base">Pelliculage</h3>
+            <p className="text-xs text-muted-foreground">
+              Le pelliculage protège la couverture et améliore son aspect visuel.
+            </p>
+          </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex flex-col gap-6">
             <FormField
               control={control}
               name="laminationOrientation"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Application</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ''}>
+                  <FormLabel className="text-sm font-medium">Application</FormLabel>
+                   <Select onValueChange={(val) => {
+                      field.onChange(val);
+                      // If changing to 'non', clear the finish
+                      if(val === 'non') {
+                        setValue('laminationFinish', undefined as unknown as any)
+                      }
+                    }} value={field.value || ''}>
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className="h-11 w-full bg-background">
                         <SelectValue placeholder="Sélectionner..." />
                       </SelectTrigger>
                     </FormControl>
@@ -108,48 +132,64 @@ export function StepBinding({ printMode }: StepBindingProps) {
               )}
             />
 
-            {hasLamination && (
-              <FormField
-                control={control}
-                name="laminationFinish"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Finition</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ''}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner..." />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {(['mat', 'brillant', 'soft_touch'] as const).map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {FRENCH_LABELS.laminationFinish[option]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+            <div className={cn("transition-all duration-300", !hasLamination ? "opacity-50 pointer-events-none" : "opacity-100")}>
+            <FormField
+              control={control}
+              name="laminationFinish"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className={cn("text-sm font-medium", !hasLamination && "text-muted-foreground")}>
+                    Finition
+                  </FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value || ''}
+                    disabled={!hasLamination}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="h-11 w-full bg-background">
+                        <SelectValue placeholder={hasLamination ? "Sélectionner..." : "Choisir d'abord l'application"} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {(['mat', 'brillant', 'soft_touch'] as const).map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {FRENCH_LABELS.laminationFinish[option]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            </div>
           </div>
-
-          <p className="text-xs text-blue-700 mt-3">
-            Le pelliculage protège la couverture et améliore son aspect visuel.
-          </p>
         </div>
       )}
 
-      {/* Info box */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
-        <p><strong>À savoir :</strong></p>
-        <ul className="mt-2 space-y-1">
-          <li>• <strong>Dos carré collé :</strong> aspect livre classique (min. 40 pages)</li>
-          <li>• <strong>Dos carré collé PUR :</strong> colle plus résistante</li>
-          {isOffset && <li>• <strong>Avec couture :</strong> solidité maximale pour usage intensif</li>}
-          <li>• <strong>Piqûre :</strong> agrafes métalliques (max. 96 pages)</li>
+      {/* Section: Binding Info (Dashed Orange Alert) */}
+      <div className="border border-dashed border-amber-500/50 rounded-lg p-5 bg-amber-500/5">
+        <p className="font-semibold text-foreground text-sm mb-3">À savoir :</p>
+        <ul className="text-sm space-y-2 text-muted-foreground">
+          <li className="flex items-start gap-2">
+            <span className="text-primary">•</span>
+            <span><strong className="text-foreground">Dos carré collé :</strong> aspect livre classique (min. 40 pages)</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary">•</span>
+            <span><strong className="text-foreground">Dos carré collé PUR :</strong> colle plus résistante</span>
+          </li>
+          {isOffset && (
+            <li className="flex items-start gap-2">
+              <span className="text-primary">•</span>
+              <span><strong className="text-foreground">Avec couture :</strong> solidité maximale pour usage intensif</span>
+            </li>
+          )}
+          <li className="flex items-start gap-2">
+            <span className="text-primary">•</span>
+            <span><strong className="text-foreground">Piqûre :</strong> agrafes métalliques (max. 96 pages)</span>
+          </li>
         </ul>
       </div>
     </div>

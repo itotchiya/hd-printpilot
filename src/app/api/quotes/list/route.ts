@@ -4,15 +4,19 @@ import { prisma } from '@/lib/db'
 /**
  * GET /api/quotes/list
  * 
- * Retrieve a list of saved quotes with optional pagination.
+ * Retrieve a list of saved quotes with optional pagination and status filter.
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
+    const status = searchParams.get('status') // 'draft', 'completed', or null for all
+    
+    const whereClause = status ? { status } : {}
     
     const quotes = await prisma.quote.findMany({
+      where: whereClause,
       take: limit,
       skip: offset,
       orderBy: {
@@ -20,10 +24,9 @@ export async function GET(request: NextRequest) {
       },
     })
     
-    const total = await prisma.quote.count()
-    
-    // Calculate simple KPIs for the response too if needed, 
-    // but better to have a separate route or just calculate here.
+    const total = await prisma.quote.count({
+      where: whereClause,
+    })
     
     return NextResponse.json({
       success: true,

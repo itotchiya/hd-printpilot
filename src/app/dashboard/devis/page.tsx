@@ -10,7 +10,7 @@ export default function DevisPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Gestion des Devis</h1>
-          <p className="text-muted-foreground">Consultez et gérez l'ensemble des devis générés.</p>
+          <p className="text-muted-foreground">Consultez et gérez l&apos;ensemble des devis générés.</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative max-w-sm">
@@ -20,7 +20,7 @@ export default function DevisPage() {
               className="pl-9 w-[300px]"
             />
           </div>
-          <Link href="/">
+          <Link href="/dashboard/devis/new">
             <Button>
               <Plus className="mr-2 h-4 w-4" /> Nouveau
             </Button>

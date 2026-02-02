@@ -1,5 +1,5 @@
-import { QuoteWizard } from '@/components/quote-wizard'
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <QuoteWizard />
+  redirect("/dashboard");
 }

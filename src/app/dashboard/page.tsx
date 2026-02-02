@@ -14,9 +14,9 @@ export default function DashboardPage() {
             Bienvenue sur votre tableau de bord HD-PrintPilot.
           </p>
         </div>
-        <Link href="/">
-          <Button className="shadow-none hover:shadow-none transition-all">
-            <Plus className="mr-2 h-4 w-4" /> Nouveau Devis
+        <Link href="/dashboard/devis/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" /> Nouveau
           </Button>
         </Link>
       </div>

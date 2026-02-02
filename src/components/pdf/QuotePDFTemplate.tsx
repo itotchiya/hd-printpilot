@@ -117,13 +117,47 @@ const styles = StyleSheet.create({
   }
 });
 
+interface Quote {
+  id: string;
+  printMode: string;
+  quantity: number;
+  formatWidth: number;
+  formatHeight: number;
+  interiorPages: number;
+  coverPages: number;
+  rabatWidth?: number;
+  interiorPaperType: string;
+  interiorGrammage: number;
+  totalWeight: number;
+  paperCost: number;
+  printingCost: number;
+  makeReadyCost?: number;
+  bindingCost: number;
+  laminationCost: number;
+  deliveryCost: number;
+  packagingCost?: number;
+  unitPrice: number;
+  total: number;
+  createdAt: string | Date;
+}
+
 interface Props {
-  quote: any;
+  quote: Quote;
 }
 
 export const QuotePDFTemplate = ({ quote }: Props) => {
-  const formatEuro = (val: any) => 
-    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(val || 0));
+  const formatEuro = (val: number | string | undefined) => {
+    // Use Intl.NumberFormat but replace non-breaking spaces (standard and narrow) 
+    // with regular spaces (Helvetica font in react-pdf doesn't render them correctly)
+    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })
+      .format(Number(val || 0))
+      .replace(/[\u00a0\u202f]/g, ' '); 
+  };
+
+  const formatNumber = (val: number | string | undefined) => {
+    return Number(val || 0).toLocaleString('fr-FR')
+      .replace(/[\u00a0\u202f]/g, ' ');
+  };
 
   const quoteRef = `QT-${(quote?.id || 'TEST').slice(-8).toUpperCase()}`;
   const dateStr = quote?.createdAt ? format(new Date(quote.createdAt), 'dd MMMM yyyy', { locale: fr }) : 'Date inconnue';
@@ -164,7 +198,7 @@ export const QuotePDFTemplate = ({ quote }: Props) => {
               </View>
               <View style={styles.row}>
                 <Text style={styles.label}>Quantité</Text>
-                <Text style={styles.value}>{(quote.quantity || 0).toLocaleString()} ex.</Text>
+                <Text style={styles.value}>{formatNumber(quote.quantity)} ex.</Text>
               </View>
             </View>
             <View style={styles.gridColumn}>
@@ -174,7 +208,7 @@ export const QuotePDFTemplate = ({ quote }: Props) => {
               </View>
               <View style={styles.row}>
                 <Text style={styles.label}>Poids Total</Text>
-                <Text style={styles.value}>{quote.totalWeight || 0} kg</Text>
+                <Text style={styles.value}>{formatNumber(quote.totalWeight)} kg</Text>
               </View>
               <View style={styles.row}>
                 <Text style={styles.label}>Papier</Text>

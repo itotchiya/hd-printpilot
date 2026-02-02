@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 
 interface StepPaperProps {
   printMode?: PrintMode
@@ -57,36 +58,106 @@ export function StepPaper({ printMode }: StepPaperProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <p className="text-slate-600">
+    <div className="space-y-10">
+      {/* Page Header */}
+      <p className="text-muted-foreground text-base">
         Sélectionnez le type de papier et le grammage pour l&apos;intérieur et la couverture.
       </p>
 
-      {/* Interior paper */}
-      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-        <h3 className="font-medium text-slate-900 mb-4">Papier intérieur</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Section: Interior Paper */}
+      <div className="border border-dashed border-primary/30 rounded-lg p-6 space-y-6 bg-muted/20">
+        <h3 className="font-semibold text-foreground text-base">Papier intérieur</h3>
+        
+        {/* Type de papier */}
+        <FormField
+          control={control}
+          name="interiorPaperType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-sm font-medium">Type de papier</FormLabel>
+              <Select 
+                onValueChange={(value) => {
+                  field.onChange(value)
+                  // Reset grammage when paper type changes
+                  setValue('interiorGrammage', undefined as unknown as number)
+                }} 
+                value={field.value || ''}
+              >
+                <FormControl>
+                  <SelectTrigger className="h-11 w-full">
+                    <SelectValue placeholder="Sélectionner..." />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {interiorPaperTypes.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Grammage */}
+        <FormField
+          control={control}
+          name="interiorGrammage"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-sm font-medium">Grammage (g/m²)</FormLabel>
+              <Select 
+                onValueChange={(value) => field.onChange(parseInt(value))} 
+                value={field.value?.toString() || ''}
+                disabled={!interiorPaperType}
+              >
+                <FormControl>
+                  <SelectTrigger className="h-11 w-full">
+                    <SelectValue placeholder={interiorPaperType ? "Sélectionner..." : "Choisir d'abord le type"} />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {interiorPaperType && getGrammages(interiorPaperType).map((grammage) => (
+                    <SelectItem key={grammage} value={grammage.toString()}>
+                      {grammage} g/m²
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      {/* Section: Cover Paper (only if has cover) */}
+      {hasCover && (
+        <div className="border border-dashed border-primary/30 rounded-lg p-6 space-y-6 bg-muted/20">
+          <h3 className="font-semibold text-foreground text-base">Papier couverture</h3>
+          
+          {/* Type de papier */}
           <FormField
             control={control}
-            name="interiorPaperType"
+            name="coverPaperType"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Type de papier</FormLabel>
+                <FormLabel className="text-sm font-medium">Type de papier</FormLabel>
                 <Select 
                   onValueChange={(value) => {
                     field.onChange(value)
-                    // Reset grammage when paper type changes
-                    setValue('interiorGrammage', undefined as unknown as number)
+                    setValue('coverGrammage', undefined as unknown as number)
                   }} 
                   value={field.value || ''}
                 >
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 w-full">
                       <SelectValue placeholder="Sélectionner..." />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {interiorPaperTypes.map((type) => (
+                    {COVER_PAPER_TYPES.map((type) => (
                       <SelectItem key={type} value={type}>
                         {type}
                       </SelectItem>
@@ -98,24 +169,25 @@ export function StepPaper({ printMode }: StepPaperProps) {
             )}
           />
 
+          {/* Grammage */}
           <FormField
             control={control}
-            name="interiorGrammage"
+            name="coverGrammage"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Grammage (g/m²)</FormLabel>
+                <FormLabel className="text-sm font-medium">Grammage (g/m²)</FormLabel>
                 <Select 
                   onValueChange={(value) => field.onChange(parseInt(value))} 
                   value={field.value?.toString() || ''}
-                  disabled={!interiorPaperType}
+                  disabled={!coverPaperType}
                 >
                   <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={interiorPaperType ? "Sélectionner..." : "Choisir d'abord le type"} />
+                    <SelectTrigger className="h-11 w-full">
+                      <SelectValue placeholder={coverPaperType ? "Sélectionner..." : "Choisir d'abord le type"} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {interiorPaperType && getGrammages(interiorPaperType).map((grammage) => (
+                    {coverPaperType && getGrammages(coverPaperType).map((grammage) => (
                       <SelectItem key={grammage} value={grammage.toString()}>
                         {grammage} g/m²
                       </SelectItem>
@@ -127,84 +199,28 @@ export function StepPaper({ printMode }: StepPaperProps) {
             )}
           />
         </div>
-      </div>
-
-      {/* Cover paper - only if has cover */}
-      {hasCover && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-medium text-blue-900 mb-4">Papier couverture</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              control={control}
-              name="coverPaperType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Type de papier</FormLabel>
-                  <Select 
-                    onValueChange={(value) => {
-                      field.onChange(value)
-                      setValue('coverGrammage', undefined as unknown as number)
-                    }} 
-                    value={field.value || ''}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {COVER_PAPER_TYPES.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={control}
-              name="coverGrammage"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Grammage (g/m²)</FormLabel>
-                  <Select 
-                    onValueChange={(value) => field.onChange(parseInt(value))} 
-                    value={field.value?.toString() || ''}
-                    disabled={!coverPaperType}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={coverPaperType ? "Sélectionner..." : "Choisir d'abord le type"} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {coverPaperType && getGrammages(coverPaperType).map((grammage) => (
-                        <SelectItem key={grammage} value={grammage.toString()}>
-                          {grammage} g/m²
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-        </div>
       )}
 
-      {/* Paper info */}
-      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-600">
-        <p><strong>Conseils papier :</strong></p>
-        <ul className="mt-2 space-y-1">
-          <li>• <strong>Couché Mat/Satin :</strong> idéal pour photos et graphiques</li>
-          <li>• <strong>Offset :</strong> parfait pour texte et écriture</li>
-          <li>• <strong>Bouffant :</strong> aspect naturel, agréable au toucher</li>
-          <li>• <strong>Couverture :</strong> privilégier 250g+ pour la rigidité</li>
+      {/* Section: Paper Tips (Dashed Orange Alert) */}
+      <div className="border border-dashed border-amber-500/50 rounded-lg p-5 bg-amber-500/5">
+        <p className="font-semibold text-foreground text-sm mb-3">Conseils papier :</p>
+        <ul className="text-sm space-y-2 text-muted-foreground">
+          <li className="flex items-start gap-2">
+            <span className="text-primary">•</span>
+            <span><strong className="text-foreground">Couché Mat/Satin :</strong> idéal pour photos et graphiques</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary">•</span>
+            <span><strong className="text-foreground">Offset :</strong> parfait pour texte et écriture</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary">•</span>
+            <span><strong className="text-foreground">Bouffant :</strong> aspect naturel, agréable au toucher</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary">•</span>
+            <span><strong className="text-foreground">Couverture :</strong> privilégier 250g+ pour la rigidité</span>
+          </li>
         </ul>
       </div>
     </div>

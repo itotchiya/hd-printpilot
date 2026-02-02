@@ -5,6 +5,11 @@ export function middleware(request: NextRequest) {
   const session = request.cookies.get('auth_session')
   const { pathname } = request.nextUrl
 
+  // Handle root path
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
   // Protected routes
   if (pathname.startsWith('/dashboard')) {
     if (!session) {
@@ -23,5 +28,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/login'],
+  matcher: ['/', '/dashboard/:path*', '/login'],
 }

@@ -19,7 +19,8 @@ import {
 } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
-import { Plus, Trash2, Truck } from 'lucide-react'
+import { Plus, Trash2, Truck, Check, AlertTriangle } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 // French departments for delivery
 const DEPARTMENTS = [
@@ -42,8 +43,8 @@ const DEPARTMENTS = [
   { code: '17', name: 'Charente-Maritime' },
   { code: '18', name: 'Cher' },
   { code: '19', name: 'Corrèze' },
-  { code: '21', name: 'Côte-d\'Or' },
-  { code: '22', name: 'Côtes-d\'Armor' },
+  { code: '21', name: "Côte-d'Or" },
+  { code: '22', name: "Côtes-d'Armor" },
   { code: '23', name: 'Creuse' },
   { code: '24', name: 'Dordogne' },
   { code: '25', name: 'Doubs' },
@@ -118,7 +119,7 @@ const DEPARTMENTS = [
   { code: '92', name: 'Hauts-de-Seine' },
   { code: '93', name: 'Seine-Saint-Denis' },
   { code: '94', name: 'Val-de-Marne' },
-  { code: '95', name: 'Val-d\'Oise' },
+  { code: '95', name: "Val-d'Oise" },
   { code: '971', name: 'Guadeloupe' },
   { code: '972', name: 'Martinique' },
   { code: '973', name: 'Guyane' },
@@ -127,7 +128,7 @@ const DEPARTMENTS = [
 ]
 
 export function StepDelivery() {
-  const { control } = useFormContext<QuoteFormData>()
+  const { control, setValue, formState: { errors } } = useFormContext<QuoteFormData>()
   const { fields, append, remove } = useFieldArray({
     control,
     name: 'deliveries',
@@ -137,6 +138,7 @@ export function StepDelivery() {
 
   const usedQuantity = deliveries.reduce((sum, d) => sum + (d.quantity || 0), 0)
   const remainingQuantity = totalQuantity - usedQuantity
+  const isBalanced = usedQuantity === totalQuantity
 
   const addDelivery = () => {
     append({
@@ -146,143 +148,220 @@ export function StepDelivery() {
     })
   }
 
+  const solderOnLast = () => {
+    if (fields.length > 0) {
+      const lastIndex = fields.length - 1
+      const currentVal = deliveries[lastIndex]?.quantity || 0
+      setValue(`deliveries.${lastIndex}.quantity`, currentVal + remainingQuantity)
+    } else {
+      addDelivery()
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      <p className="text-slate-600">
+    <div className="space-y-10">
+      <p className="text-muted-foreground text-base">
         Répartissez les exemplaires entre les différentes destinations de livraison.
       </p>
 
-      {/* Quantity summary */}
-      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-        <div className="flex justify-between items-center">
-          <span className="text-slate-600">Quantité totale commandée :</span>
-          <span className="font-bold text-lg">{totalQuantity} ex.</span>
-        </div>
-        <div className="flex justify-between items-center mt-2">
-          <span className="text-slate-600">Quantité répartie :</span>
-          <span className={`font-medium ${usedQuantity === totalQuantity ? 'text-green-600' : 'text-amber-600'}`}>
-            {usedQuantity} / {totalQuantity} ex.
-          </span>
-        </div>
-        {remainingQuantity > 0 && (
-          <p className="text-sm text-amber-600 mt-2">
-            ⚠️ Il reste {remainingQuantity} exemplaires à répartir
-          </p>
-        )}
-      </div>
-
-      {/* Delivery destinations */}
-      <div className="space-y-4">
-        {fields.map((field, index) => (
-          <div key={field.id} className="bg-white border border-slate-200 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Truck className="w-5 h-5 text-blue-600" />
-                <span className="font-medium">Livraison {index + 1}</span>
+      {/* Quantity balance indicator - Warning Orange Style */}
+      <div className={cn(
+        "border border-dashed rounded-lg p-6 transition-colors",
+        "bg-amber-500/5 border-amber-500/50"
+      )}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-foreground">Balance des quantités :</span>
+              <span className={cn(
+                "text-lg font-bold",
+                isBalanced ? "text-green-600 dark:text-green-500" : "text-amber-600 dark:text-amber-500"
+              )}>
+                {usedQuantity} / {totalQuantity} ex.
+              </span>
+            </div>
+            {!isBalanced && (
+              <div className="flex items-center gap-2 mt-2 text-amber-600 dark:text-amber-500">
+                <AlertTriangle className="w-4 h-4" />
+                <p className="text-sm font-medium">
+                  {remainingQuantity > 0 
+                    ? `Il reste ${remainingQuantity} exemplaires à répartir`
+                    : `Trop d'exemplaires répartis (excédent de ${Math.abs(remainingQuantity)})`
+                  }
+                </p>
               </div>
-              {fields.length > 1 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => remove(index)}
-                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Quantity for this delivery */}
-              <FormField
-                control={control}
-                name={`deliveries.${index}.quantity`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Quantité</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        {...field}
-                        onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
-                        value={field.value ?? ''}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Department */}
-              <FormField
-                control={control}
-                name={`deliveries.${index}.department`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Département</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner..." />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {DEPARTMENTS.map((dept) => (
-                          <SelectItem key={dept.code} value={dept.code}>
-                            {dept.code} - {dept.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Tail lift option */}
-              <FormField
-                control={control}
-                name={`deliveries.${index}.tailLift`}
-                render={({ field }) => (
-                  <FormItem className="flex items-end space-x-2 pb-2">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="cursor-pointer text-sm">
-                      Hayon élévateur (+60€)
-                    </FormLabel>
-                  </FormItem>
-                )}
-              />
-            </div>
+            )}
           </div>
-        ))}
+          
+          {!isBalanced && (
+            <Button 
+              type="button" 
+              variant="default"
+              size="sm" 
+              onClick={solderOnLast}
+              className="bg-amber-500 hover:bg-amber-600 text-white border-none"
+            >
+              {remainingQuantity > 0 ? 'Solder le reste' : 'Ajuster le total'}
+            </Button>
+          )}
+          {isBalanced && (
+            <div className="flex items-center gap-1 text-green-600 dark:text-green-500 text-sm font-medium px-3 py-1 bg-green-500/10 rounded-full">
+              <Check className="w-4 h-4" />
+              Répartition correcte
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Add delivery button */}
-      <Button
-        type="button"
-        variant="outline"
-        onClick={addDelivery}
-        className="w-full gap-2"
-      >
-        <Plus className="w-4 h-4" />
-        Ajouter une destination
-      </Button>
+      {errors.deliveries?.root && (
+        <p className="text-sm text-destructive font-medium border border-destructive/20 bg-destructive/5 p-3 rounded-lg">
+          {errors.deliveries.root.message}
+        </p>
+      )}
 
-      {/* Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-        <p><strong>À savoir :</strong></p>
-        <ul className="mt-2 space-y-1">
-          <li>• Le tarif de livraison dépend du département et du poids total</li>
-          <li>• Le hayon élévateur est recommandé si pas de quai de déchargement</li>
-          <li>• Les livraisons sont groupées quand possible pour réduire les frais</li>
-        </ul>
+      {/* Destinations Section - Wrapped in single dashed container */}
+      <div className="border border-dashed border-muted-foreground/30 rounded-lg p-6 bg-muted/20 space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-foreground text-lg">Destinations</h3>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={addDelivery}
+            className="gap-2 shadow-none"
+          >
+            <Plus className="w-4 h-4" />
+            Ajouter une destination
+          </Button>
+        </div>
+
+        <div className="space-y-8">
+          {fields.map((field, index) => (
+            <div key={field.id} className="space-y-6 relative group">
+              {index > 0 && <div className="border-t border-dashed border-muted-foreground/20 my-6" />}
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold text-foreground text-base">Destination {index + 1}</span>
+                </div>
+                {fields.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => remove(index)}
+                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors h-8 w-8"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+
+              <div className="space-y-6">
+                {/* Quantity */}
+                <FormField
+                  control={control}
+                  name={`deliveries.${index}.quantity`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">Quantité</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          className="h-11 w-full bg-background shadow-none"
+                          {...field}
+                          onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
+                          value={field.value ?? ''}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Department */}
+                <FormField
+                  control={control}
+                  name={`deliveries.${index}.department`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">Département</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="h-11 w-full bg-background shadow-none">
+                            <SelectValue placeholder="Sélectionner un département..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="shadow-none border-border">
+                          {DEPARTMENTS.map((dept) => (
+                            <SelectItem key={dept.code} value={dept.code}>
+                              <span className="font-medium mr-2">{dept.code}</span>
+                              <span className="text-muted-foreground">{dept.name}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Tail Lift - Full Clickable Card */}
+                <FormField
+                  control={control}
+                  name={`deliveries.${index}.tailLift`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <div
+                          className={cn(
+                            "flex items-center gap-4 p-4 border rounded-lg cursor-pointer transition-all duration-200 bg-background hover:border-primary/50",
+                            field.value ? "border-primary bg-primary/5" : "border-input"
+                          )}
+                          onClick={() => field.onChange(!field.value)}
+                        >
+                          <div className={cn(
+                            "w-5 h-5 rounded border flex items-center justify-center transition-colors shrink-0",
+                            field.value ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30 bg-transparent"
+                          )}>
+                            {field.value && <Check className="w-3.5 h-3.5" />}
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <span className="font-medium text-sm text-foreground block">
+                              Hayon élévateur (+60€)
+                            </span>
+                            <span className="text-xs text-muted-foreground block">
+                              Indispensable si le destinataire ne dispose pas de quai de déchargement
+                            </span>
+                          </div>
+                        </div>
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Logistics Info Footer - Soft Gray */}
+      <div className="bg-muted/50 border border-border/50 rounded-lg p-6">
+        <div className="flex items-start gap-4">
+          <div className="p-2 bg-background rounded-full border shadow-sm">
+            <Truck className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground text-sm">Logistique et Livraison</h4>
+            <ul className="text-sm text-muted-foreground space-y-1 list-disc ml-4">
+              <li>Le tarif est calculé dynamiquement selon le département et le poids total de la commande.</li>
+              <li>Le hayon élévateur est indispensable si le destinataire ne dispose pas d&apos;un quai de déchargement.</li>
+              <li>Toutes les livraisons sont effectuées par transporteur spécialisé avec suivi en temps réel.</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   )
