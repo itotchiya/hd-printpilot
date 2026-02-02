@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { generateQuotePdfBuffer } from '@/lib/pdf/quote-pdf'
-import fs from 'fs'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const logFile = 'pdf-debug.log';
-  fs.appendFileSync(logFile, `\n--- NEW REQUEST ${new Date().toISOString()} ---\n`);
   try {
     const { id } = await params;
-    fs.appendFileSync(logFile, `Fetching quote ID: ${id}\n`);
+    console.log(`[PDF] Requesting PDF for quote ID: ${id}`);
     
     // Fetch the quote from DB
     const quote = await prisma.quote.findUnique({
@@ -19,19 +16,18 @@ export async function GET(
     })
 
     if (!quote) {
-      fs.appendFileSync(logFile, `Quote not found\n`);
+      console.warn(`[PDF] Quote not found: ${id}`);
       return NextResponse.json({ error: 'Devis non trouvé' }, { status: 404 })
     }
 
-    fs.appendFileSync(logFile, `Quote found, generating PDF...\n`);
-
     // Serialize Prisma object to plain JSON to avoid Decimal/Date issues with react-pdf
+    // Decimal from Prisma (Prisma.Decimal) can cause issues when passed to components
     const plainQuote = JSON.parse(JSON.stringify(quote));
 
     // Generate PDF Buffer
     try {
       const pdfBuffer = await generateQuotePdfBuffer(plainQuote)
-      fs.appendFileSync(logFile, `PDF generated, size: ${pdfBuffer.length}\n`);
+      console.log(`[PDF] Generated buffer for ${id}, size: ${pdfBuffer.length} bytes`);
 
       // Return the PDF response
       const filename = `Devis_QT-${id.slice(-8).toUpperCase()}.pdf`
@@ -45,12 +41,12 @@ export async function GET(
         },
       })
     } catch (renderErr: any) {
-      fs.appendFileSync(logFile, `RENDER ERROR: ${renderErr.message}\n${renderErr.stack}\n`);
+      console.error(`[PDF] Render error:`, renderErr);
       throw renderErr;
     }
 
   } catch (error: any) {
-    fs.appendFileSync(logFile, `GENERAL ERROR: ${error.message}\n${error.stack}\n`);
+    console.error(`[PDF] General error in route:`, error);
     return NextResponse.json(
       { error: 'Erreur lors de la génération du PDF', details: error.message },
       { status: 500 }
