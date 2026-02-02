@@ -8,19 +8,21 @@ interface DashedCardProps {
   children: React.ReactNode
   active?: boolean
   className?: string
-  color?: "blue" | "orange" | "primary"
+  color?: "blue" | "orange" | "primary" | "emerald"
 }
 
 const colorMap = {
   blue: "border-blue-500",
   orange: "border-orange-500",
   primary: "border-primary",
+  emerald: "border-emerald-500",
 }
 
 const shadowMap = {
   blue: "shadow-[inset_0_0_0_2px_theme(colors.blue.500)]",
   orange: "shadow-[inset_0_0_0_2px_theme(colors.orange.500)]",
   primary: "shadow-[inset_0_0_0_2px_theme(colors.primary.DEFAULT)]",
+  emerald: "shadow-[inset_0_0_0_2px_theme(colors.emerald.500)]",
 }
 
 export function DashedCard({
@@ -39,6 +41,7 @@ export function DashedCard({
           : cn("hover:border-solid hover:opacity-100", 
                color === "blue" ? "hover:border-blue-500" : 
                color === "orange" ? "hover:border-orange-500" : 
+               color === "emerald" ? "hover:border-emerald-500" :
                "hover:border-primary"),
         className
       )}
@@ -49,6 +52,7 @@ export function DashedCard({
             "absolute top-2 right-2 z-10 p-0.5 rounded-full",
             color === "blue" ? "bg-blue-500 text-white" : 
             color === "orange" ? "bg-orange-500 text-white" : 
+            color === "emerald" ? "bg-emerald-500 text-white" :
             "bg-primary text-primary-foreground dark:text-black"
           )}
         >
