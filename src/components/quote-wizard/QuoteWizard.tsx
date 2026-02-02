@@ -6,13 +6,14 @@ import { useForm, FormProvider, Path } from 'react-hook-form'
 import { toast } from 'sonner'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { quoteSchema, QuoteFormData } from '@/lib/schemas/quote-schema'
+import { StepProductType } from './steps/StepProductType'
 import { StepPrintMode } from './steps/StepPrintMode'
 import { StepQuantityFormat } from './steps/StepQuantityFormat'
 import { StepPages } from './steps/StepPages'
 import { StepPaper } from './steps/StepPaper'
 import { StepColors } from './steps/StepColors'
 import { StepBinding } from './steps/StepBinding'
-import { StepProductOptions } from './steps/StepProductOptions'
+import { StepPackaging } from './steps/StepPackaging'
 import { StepDelivery } from './steps/StepDelivery'
 import { StepReview } from './steps/StepReview'
 import { QuoteResultView, type QuoteResult } from './QuoteResultView'
@@ -24,7 +25,7 @@ import {
   ChevronRight
 } from 'lucide-react'
 
-const TOTAL_STEPS = 9
+const TOTAL_STEPS = 10
 
 import { useWizard } from '@/context/WizardContext';
 
@@ -212,14 +213,15 @@ export function QuoteWizard() {
 
   const getFieldsForStep = (step: number) => {
     switch (step) {
-      case 1: return ['printMode'];
-      case 2: return ['quantity', 'format'];
-      case 3: return ['interiorPages', 'coverPages', 'rabatWidth'];
-      case 4: return ['interiorPaperType', 'interiorGrammage', 'coverPaperType', 'coverGrammage'];
-      case 5: return ['interiorColors', 'coverColors'];
-      case 6: return ['bindingType', 'laminationOrientation', 'laminationFinish'];
-      case 7: return ['productType', 'foldType', 'foldCount', 'secondaryFoldType', 'packagingType'];
-      case 8: return ['deliveries'];
+      case 1: return ['productType', 'foldType', 'foldCount', 'secondaryFoldType'];
+      case 2: return ['printMode'];
+      case 3: return ['quantity', 'format'];
+      case 4: return ['interiorPages', 'coverPages', 'rabatWidth'];
+      case 5: return ['interiorPaperType', 'interiorGrammage', 'coverPaperType', 'coverGrammage'];
+      case 6: return ['interiorColors', 'coverColors'];
+      case 7: return ['bindingType', 'laminationOrientation', 'laminationFinish'];
+      case 8: return ['packagingType'];
+      case 9: return ['deliveries'];
       default: return [];
     }
   };
@@ -379,15 +381,16 @@ export function QuoteWizard() {
 
   const renderStep = () => {
     switch (currentStep) {
-      case 1: return <StepPrintMode />
-      case 2: return <StepQuantityFormat />
-      case 3: return <StepPages printMode={printMode} />
-      case 4: return <StepPaper printMode={printMode} />
-      case 5: return <StepColors printMode={printMode} />
-      case 6: return <StepBinding printMode={printMode} />
-      case 7: return <StepProductOptions />
-      case 8: return <StepDelivery />
-      case 9: return <StepReview onEditStep={handleStepClick} />
+      case 1: return <StepProductType />
+      case 2: return <StepPrintMode />
+      case 3: return <StepQuantityFormat />
+      case 4: return <StepPages printMode={printMode} />
+      case 5: return <StepPaper printMode={printMode} />
+      case 6: return <StepColors printMode={printMode} />
+      case 7: return <StepBinding printMode={printMode} />
+      case 8: return <StepPackaging />
+      case 9: return <StepDelivery />
+      case 10: return <StepReview onEditStep={handleStepClick} />
       default: return null
     }
   };

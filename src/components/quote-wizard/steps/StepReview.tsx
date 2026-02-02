@@ -27,22 +27,43 @@ export function StepReview({ onEditStep }: StepReviewProps) {
       <div className="border border-dashed border-muted-foreground/30 rounded-lg p-8 bg-muted/20">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
           
+          {/* Product Type */}
+          <ReviewSection title="Produit" onEdit={() => onEditStep(1)}>
+            <ReviewRow 
+              label="Type" 
+              value={data.productType ? FRENCH_LABELS.productType[data.productType] : '-'} 
+            />
+            {hasFold && (
+              <ReviewRow 
+                label="Pliage" 
+                value={`${FRENCH_LABELS.foldType[data.foldType!]} (${data.foldCount || 0} plis)`} 
+              />
+            )}
+          </ReviewSection>
+
           {/* Print mode & Quantity */}
-          <ReviewSection title="Impression" onEdit={() => onEditStep(1)}>
+          <ReviewSection title="Impression" onEdit={() => onEditStep(2)}>
             <ReviewRow label="Mode" value={data.printMode ? FRENCH_LABELS.printMode[data.printMode] : '-'} />
             <ReviewRow label="Quantité" value={`${data.quantity || 0} exemplaires`} />
             <ReviewRow label="Format" value={data.format || '-'} />
           </ReviewSection>
 
+          {/* Quantity & Format - Actually merged into Step 3 above, but let's double check QuoteWizard getFieldsForStep */}
+          {/* Step 3 in QuoteWizard is indeed quantity/format */}
+          <ReviewSection title="Quantité & Format" onEdit={() => onEditStep(3)}>
+             <ReviewRow label="Quantité" value={`${data.quantity || 0} ex.`} />
+             <ReviewRow label="Format" value={data.format || '-'} />
+          </ReviewSection>
+
           {/* Pages */}
-          <ReviewSection title="Pages" onEdit={() => onEditStep(3)}>
+          <ReviewSection title="Pages" onEdit={() => onEditStep(4)}>
             <ReviewRow label="Pages intérieures" value={`${data.interiorPages || 0} pages`} />
             <ReviewRow label="Couverture" value={data.coverPages ? FRENCH_LABELS.coverPages[data.coverPages] : '-'} />
             {data.rabatWidth && <ReviewRow label="Largeur rabat" value={`${data.rabatWidth} cm`} />}
           </ReviewSection>
 
           {/* Paper */}
-          <ReviewSection title="Papier" onEdit={() => onEditStep(4)}>
+          <ReviewSection title="Papier" onEdit={() => onEditStep(5)}>
             <ReviewRow 
               label="Intérieur" 
               value={`${data.interiorPaperType || '-'} ${data.interiorGrammage ? `(${data.interiorGrammage}g)` : ''}`} 
@@ -56,7 +77,7 @@ export function StepReview({ onEditStep }: StepReviewProps) {
           </ReviewSection>
 
           {/* Colors */}
-          <ReviewSection title="Couleurs" onEdit={() => onEditStep(5)}>
+          <ReviewSection title="Couleurs" onEdit={() => onEditStep(6)}>
             <ReviewRow 
               label="Intérieur" 
               value={data.interiorColors ? FRENCH_LABELS.colors[data.interiorColors] : '-'} 
@@ -70,39 +91,29 @@ export function StepReview({ onEditStep }: StepReviewProps) {
           </ReviewSection>
 
           {/* Binding & Finishing */}
-          <ReviewSection title="Reliure & Finition" onEdit={() => onEditStep(6)}>
+          <ReviewSection title="Reliure & Finition" onEdit={() => onEditStep(7)}>
             <ReviewRow 
               label="Reliure" 
               value={data.bindingType ? FRENCH_LABELS.binding[data.bindingType] : '-'} 
             />
-            {hasCover && hasLamination && (
+            {hasLamination && (
               <ReviewRow 
                 label="Pelliculage" 
-                value={`${FRENCH_LABELS.laminationOrientation[data.laminationOrientation!]} - ${data.laminationFinish ? FRENCH_LABELS.laminationFinish[data.laminationFinish] : ''}`} 
+                value={`${data.laminationOrientation ? FRENCH_LABELS.laminationOrientation[data.laminationOrientation] : ''} - ${data.laminationFinish ? FRENCH_LABELS.laminationFinish[data.laminationFinish] : ''}`} 
               />
             )}
           </ReviewSection>
 
-          {/* Product Options */}
-          <ReviewSection title="Produit" onEdit={() => onEditStep(7)}>
+          {/* Packaging */}
+          <ReviewSection title="Conditionnement" onEdit={() => onEditStep(8)}>
             <ReviewRow 
               label="Type" 
-              value={data.productType ? FRENCH_LABELS.productType[data.productType] : '-'} 
-            />
-            {hasFold && (
-              <ReviewRow 
-                label="Pliage" 
-                value={`${FRENCH_LABELS.foldType[data.foldType!]} (${data.foldCount || 0} plis)`} 
-              />
-            )}
-            <ReviewRow 
-              label="Conditionnement" 
               value={data.packagingType ? FRENCH_LABELS.packaging[data.packagingType] : '-'} 
             />
           </ReviewSection>
 
-          {/* Delivery - Full Width on Mobile, but Grid Item on Desktop */}
-          <ReviewSection title="Livraison" onEdit={() => onEditStep(8)} className="md:col-span-2">
+          {/* Delivery */}
+          <ReviewSection title="Livraison" onEdit={() => onEditStep(9)} className="md:col-span-2">
             <div className="space-y-2">
               {data.deliveries && data.deliveries.length > 0 ? (
                 data.deliveries.map((delivery, index) => (

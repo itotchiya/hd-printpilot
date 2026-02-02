@@ -59,7 +59,13 @@ export function DashedCard({
           <Check className="w-3 h-3" strokeWidth={3} />
         </div>
       )}
-      <div className={cn("relative", className?.includes("h-full") && "h-full")}>
+      <div className={cn(
+        "relative",
+        className?.includes("h-full") && "h-full",
+        className?.includes("flex") && "flex items-center justify-center",
+        className?.includes("flex-col") && "flex-col",
+        (className?.includes("flex") && className?.includes("h-full")) && "h-full w-full"
+      )}>
         {children}
       </div>
     </div>
